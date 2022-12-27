@@ -4,12 +4,13 @@ import imaplib
 import traceback
 from imap_tools import A, MailBox, MailboxLoginError, MailboxLogoutError
 
-from dotenv import dotenv_values
+from dotenv import load_dotenv
 from supabase import create_client, Client
+import os
 
-config = dotenv_values(".env")
-url: str = config['SUPABASE_URL']
-key: str = config['SUPABASE_KEY']
+load_dotenv()
+url = os.getenv("SUPABASE_URL")
+key = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(url, key)
 
 done = False
@@ -43,5 +44,5 @@ while not done:
             imaplib.IMAP4.abort, MailboxLoginError, MailboxLogoutError,
             socket.herror, socket.gaierror, socket.timeout) as e:
         print(
-            f'## Error\n{e}\n{traceback.format_exc()}\nreconnect in a minute...')
+            f'## Error\n{e}\n{traceback.format_exc()}\n reconnect in a minute...')
         time.sleep(60)
