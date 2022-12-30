@@ -1,14 +1,24 @@
 {
-  "name": "email-ts",
+  "name": "email",
   "version": "1.0.0",
   "description": "",
-  "main": "index.ts",
+  "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/simplism-io/email.git"
+  },
   "author": "",
   "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/simplism-io/email/issues"
+  },
+  "homepage": "https://github.com/simplism-io/email#readme",
   "dependencies": {
-    "mail-listener-typescript": "^1.0.18"
+    "@dchicchon/mail-listener": "^2.0.6",
+    "@supabase/supabase-js": "^2.2.2",
+    "dotenv": "^16.0.3"
   }
 }
