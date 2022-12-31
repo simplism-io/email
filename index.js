@@ -4,9 +4,37 @@ const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(process.env.MODE == 'debug' ? process.env.SUPABASE_URL_DEBUG : process.env.SUPABASE_URL_PROD, process.env.MODE == 'debug' ? process.env.SUPABASE_KEY_DEBUG : process.env.SUPABASE_KEY_PROD)
 
+
+async function getMailboxes() {
+
+    const { data, error } = await supabase
+        .from('mailboxes')
+        .select()
+
+    console.log(data);
+
+    supabase
+        .channel('public:mailboxes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'mailboxes' }, async payload => {
+            console.log('Change received!', payload)
+
+            const { data, error } = await supabase
+                .from('mailboxes')
+                .select()
+
+            console.log(data);
+
+        })
+        .subscribe()
+}
+
+
+// }
+getMailboxes();
+
 var mailListener = new MailListener({
     username: "joost@jstdk.dev", // mail
-    password: "iNUDd6ZduCrK", // pass
+    password: process.env.TEMP_PASSWORD, // pass
     host: 'imappro.zoho.com',
     port: 993, // imap port
     tls: true,
@@ -55,9 +83,9 @@ mailListener.start(); // start listening
 //     }
 // });
 
-mailListener.on("server:connected", function () {
-    console.log("imapConnected");
-});
+// mailListener.on("server:connected", function () {
+//     console.log("imapConnected");
+// });
 
 // mailListener.on("mailbox", function (mailbox) {
 //     console.log("Total number of mails: ", mailbox.messages.total); // this field in mailbox gives the total number of emails
