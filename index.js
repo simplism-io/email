@@ -5,13 +5,47 @@ const { createClient } = require('@supabase/supabase-js');
 const supabase = createClient(process.env.MODE == 'debug' ? process.env.SUPABASE_URL_DEBUG : process.env.SUPABASE_URL_PROD, process.env.MODE == 'debug' ? process.env.SUPABASE_KEY_DEBUG : process.env.SUPABASE_KEY_PROD)
 
 
-async function getMailboxes() {
+function createMailListener(mailbox) {
 
+
+    var mailListener[mailbox.email] = new MailListener({
+        username: "joost@jstdk.dev", // mail
+        password: process.env.TEMP_PASSWORD, // pass
+        host: 'imappro.zoho.com',
+        port: 993, // imap port
+        tls: true,
+        connTimeout: 10000, // Default by node-imap
+        authTimeout: 5000, // Default by node-imap,
+        debug: console.log, // Or your custom function with only one incoming argument. Default: null
+        tlsOptions: { rejectUnauthorized: false },
+        mailbox: "INBOX", // mailbox to monitor
+        searchFilter: ["NEW"], // the search filter being used after an IDLE notification has been retrieved
+        markSeen: true, // all fetched email willbe marked as seen and not fetched next time
+        fetchUnreadOnStart: true, // use it only if you want to get all unread email on lib start. Default is `false`,
+        attachments: true, // download attachments as they are encountered to the project directory
+        attachmentOptions: { directory: "attachments/" } // specify a download directory for attachments
+    });
+
+    mailListener.start();
+
+}
+
+async function getMailBoxes() {
     const { data, error } = await supabase
         .from('mailboxes')
         .select()
 
     console.log(data);
+
+    return data
+}
+
+async function main() {
+
+    //getMailBoxes()
+    //createMailListeners()
+
+    //CREATE CONNECTIONS FOR EXISTING MAILBOXES
 
     supabase
         .channel('public:mailboxes')
@@ -23,6 +57,11 @@ async function getMailboxes() {
                 .select()
 
             console.log(data);
+            //createNewMailListener()
+
+
+            //CREATE CONNECTION FOR NEW MAILBOX
+
 
         })
         .subscribe()
@@ -30,27 +69,13 @@ async function getMailboxes() {
 
 
 // }
-getMailboxes();
+var mailboxes = await getMailBoxes();
 
-var mailListener = new MailListener({
-    username: "joost@jstdk.dev", // mail
-    password: process.env.TEMP_PASSWORD, // pass
-    host: 'imappro.zoho.com',
-    port: 993, // imap port
-    tls: true,
-    connTimeout: 10000, // Default by node-imap
-    authTimeout: 5000, // Default by node-imap,
-    debug: console.log, // Or your custom function with only one incoming argument. Default: null
-    tlsOptions: { rejectUnauthorized: false },
-    mailbox: "INBOX", // mailbox to monitor
-    searchFilter: ["NEW"], // the search filter being used after an IDLE notification has been retrieved
-    markSeen: true, // all fetched email willbe marked as seen and not fetched next time
-    fetchUnreadOnStart: true, // use it only if you want to get all unread email on lib start. Default is `false`,
-    attachments: true, // download attachments as they are encountered to the project directory
-    attachmentOptions: { directory: "attachments/" } // specify a download directory for attachments
-});
+mailboxes.forEach(createMailListener);
 
-mailListener.start(); // start listening
+
+main();
+// start listening
 
 // stop listening
 //mailListener.stop();
