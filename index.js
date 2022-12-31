@@ -8,13 +8,25 @@ const supabase = createClient(process.env.MODE == 'debug' ? process.env.SUPABASE
 
 var mailListeners = []
 
+async function start() {
+    const { data, error } = await supabase
+        .from('mailboxes')
+        .select()
 
-async function createMessage(mail) {
-    const { error } = await supabase
+    data.forEach(createMailListener);
+}
+
+async function createMessage(mail, organisation_id) {
+
+    const { data, error } = await supabase
         .from('messages')
-        .insert({ title: mail.title, body: mail.body })
+        .insert({ organisation_id: organisation_id, subject: mail.subject, body: mail.body })
 
     //RETRIEVE MESSAGE ID
+
+    console.log(data);
+    console.log(error);
+
 
     if (error.status == 200) {
         return true
@@ -24,8 +36,17 @@ async function createMessage(mail) {
     }
 }
 
-async function storeAttachments(messageId, url) {
-    const { error } = await supabase
+async function storeAttachments(attachment, messageId) {
+
+    const { data1, error1 } = await supabase
+        .storage
+        .from('attachments')
+        .upload('public/avatar1.png', attachment, {
+            cacheControl: '3600',
+            upsert: false
+        })
+
+    const { data2, error2 } = await supabase
         .from('attachments')
         .insert({ message_id: messageId, url: url })
 
@@ -52,7 +73,7 @@ function createMailListener(mailbox) {
 
     mailListeners[mailbox.email] = new MailListener({
         username: mailbox.email, // mail
-        password: process.env.TEMP_PASSWORD, // pass
+        password: mailbox.password, // pass
         host: mailbox.host,
         port: 993, // imap port
         tls: true,
@@ -76,10 +97,10 @@ function createMailListener(mailbox) {
 
     mailListeners[mailbox.email].on("mail", async function (mail, seqno) {
 
-        var messageId = createMessage(mailData);
+
+        var messageId = await createMessage(mail, mailbox.organisation_id);
 
         if (messageId != null) {
-
             if (mail.attachments.length > 0) {
                 for (let attachment of mail.attachments) {
                     resultStoreAttachments = await storeAttachments(attachment, messageId);
@@ -106,24 +127,15 @@ function createMailListener(mailbox) {
 
 }
 
-async function getMailBoxes() {
-    const { data, error } = await supabase
-        .from('mailboxes')
-        .select()
-    console.log(data);
-    return data
-}
-
-async function createMailboxListListener() {
+async function createCloudListener() {
     supabase
         .channel('public:mailboxes')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'mailboxes' }, async payload => {
             console.log('Mailbox list has been updated', payload)
-            createNewMailListener(payload);
+            createMailListener(payload);
         })
         .subscribe()
 }
 
-var mailboxes = await getMailBoxes();
-mailboxes.forEach(createMailListener);
-createMailboxListListener();
+start();
+createCloudListener();
