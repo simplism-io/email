@@ -5,7 +5,6 @@ const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(process.env.MODE == 'debug' ? process.env.SUPABASE_URL_DEBUG : process.env.SUPABASE_URL_PROD, process.env.MODE == 'debug' ? process.env.SUPABASE_KEY_DEBUG : process.env.SUPABASE_KEY_PROD)
 
-
 var mailListeners = []
 
 async function start() {
@@ -20,54 +19,34 @@ async function createMessage(mail, organisation_id) {
 
     const { data, error } = await supabase
         .from('messages')
-        .insert({ organisation_id: organisation_id, subject: mail.subject, body: mail.body })
+        .insert({ organisation_id: organisation_id, subject: mail.subject, body: mail.text })
+        .select()
 
-    //RETRIEVE MESSAGE ID
-
-    console.log(data);
-    console.log(error);
-
-
-    if (error.status == 200) {
-        return true
+    if (data != null && error == null) {
+        return data[0].id
     }
     else {
-        return false
+        return null
     }
 }
 
-async function storeAttachments(attachment, messageId) {
+async function saveAttachment(attachment, messageId) {
 
-    const { data1, error1 } = await supabase
-        .storage
+    var bufferToBase64 = attachment.toString('base64');
+
+    const { data, error } = await supabase
         .from('attachments')
-        .upload('public/avatar1.png', attachment, {
-            cacheControl: '3600',
-            upsert: false
-        })
+        .insert({ message_id: messageId, attachment: bufferToBase64 })
+        .select()
 
-    const { data2, error2 } = await supabase
-        .from('attachments')
-        .insert({ message_id: messageId, url: url })
-
-    if (error.status == 200) {
-        return true
+    if (data != null && error == null) {
+        return true;
     }
     else {
-        return false
+        return false;
     }
+
 }
-
-function deleteLocalAttachment(file) {
-    fs.unlink('attachments/${file}', err => {
-        if (err) {
-            throw err
-        }
-
-        console.log('File is deleted.')
-    })
-}
-
 
 function createMailListener(mailbox) {
 
@@ -84,46 +63,48 @@ function createMailListener(mailbox) {
         mailbox: "INBOX", // mailbox to monitor
         searchFilter: ["NEW"], // the search filter being used after an IDLE notification has been retrieved
         markSeen: true, // all fetched email willbe marked as seen and not fetched next time
-        fetchUnreadOnStart: false, // use it only if you want to get all unread email on lib start. Default is `false`,
-        attachments: true, // download attachments as they are encountered to the project directory
+        fetchUnreadOnStart: true, // use it only if you want to get all unread email on lib start. Default is `false`,
+        attachments: false, // download attachments as they are encountered to the project directory
         attachmentOptions: { directory: "attachments/" } // specify a download directory for attachments
     });
 
     mailListeners[mailbox.email].start();
 
     mailListeners[mailbox.email].on("server:connected", function () {
-        console.log("imapConnected");
+        console.log("Connected to IMAP server");
     });
 
     mailListeners[mailbox.email].on("mail", async function (mail, seqno) {
-
 
         var messageId = await createMessage(mail, mailbox.organisation_id);
 
         if (messageId != null) {
             if (mail.attachments.length > 0) {
                 for (let attachment of mail.attachments) {
-                    resultStoreAttachments = await storeAttachments(attachment, messageId);
-                    if (resultStoreAttachments == true) {
-                        deleteLocalAttachment(attachment);
-                        console.log('Main successfully stores')
+                    console.log(attachment);
+                    var resultSaveAttachment = await saveAttachment(attachment.content, messageId);
+                    if (resultSaveAttachment == true) {
+                        console.log('Transaction complete');
                     }
                 }
+            }
+            else {
+                console.log('Transaction complete');
             }
         }
     })
 
     mailListeners[mailbox.email].on("error", function (err) {
         console.log(err);
-        mailListeners[mailbox.email].stop();
-        createMailListener(mailbox)
+        // mailListeners[mailbox.email].stop();
+        // createMailListener(mailbox)
     });
 
-    mailListeners[mailbox.email].on("server:disconnected", function () {
-        console.log("imapDisconnected");
-        mailListeners[mailbox.email].stop();
-        createMailListener(mailbox)
-    });
+    // mailListeners[mailbox.email].on("server:disconnected", function () {
+    //     console.log("imapDisconnected");
+    //     mailListeners[mailbox.email].stop();
+    //     createMailListener(mailbox)
+    // });
 
 }
 
