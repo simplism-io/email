@@ -8,7 +8,9 @@ var channelId;
 async function setChannelId() {
 
     const { data, error } = await supabase
-        .from('channels').select().eq('channel', 'email').single()
+        .from('channels')
+        .select().eq('channel', 'email')
+        .single()
 
     if (data != null) {
         channelId = data.id
@@ -34,23 +36,23 @@ async function start() {
     }
 }
 
-async function getEmailAddressId(email) {
+async function getEmailAddressId(mail) {
 
     const { data, error } = await supabase
         .from('email_addresses')
+        .select('id, customers(id)')
         .eq('email', email)
-        .select(id, customers(id))
         .single()
 
-    console.log(data);
+    if (data == null) {
 
-    if (data != null) {
+        console.log('YEEAHH')
+
         const { data, error } = await supabase
             .from('email_addresses')
-            .insert({ email: email })
+            .insert({ email: email, 'active': true })
+            .select()
             .single()
-
-        console.log(data);
 
         if (data != null) {
             return data.id
@@ -65,31 +67,45 @@ async function getEmailAddressId(email) {
 
 }
 
-async function createMessage(mail, organisation_id) {
+async function createMessage(mail, organisationId) {
 
     const { data, error } = await supabase
         .from('messages')
-        .insert({ organisation_id: organisation_id, channel_id: channelId, subject: mail.subject, body: mail.text, incoming: true })
+        .insert({ organisation_id: organisationId, channel_id: channelId, subject: mail.subject, body: mail.text, incoming: true })
         .single()
 
-    console.log(data);
-
     if (data != null && error == null) {
+
+        var messageId = data.id;
 
         var result = await getEmailAddressId(mail.from);
         console.log(result)
 
-        const { data, error } = await supabase
-            .from('emails')
-            .insert({ organisation_id: organisation_id, channel_id: channelId, subject: mail.subject, body: mail.text, incoming: true })
-            .select()
+        if (result != null) {
 
+            const { data, error } = await supabase
+                .from('emails')
+                .insert({ organisation_id: organisationId, channel_id: channelId, subject: mail.subject, body: mail.text, incoming: true })
+                .select()
+                .single()
 
-        return data[0].id
+            if (data != null) {
+                console.log('Email successfully saved')
+            }
+            else {
+                console.log('Email not successfully saved')
+            }
+        }
+        else {
+            console.log('No email_address.id & email saved')
+            return null
+        }
     }
     else {
-        return null
+        messageId = null
     }
+    return messageId;
+
 }
 
 async function saveAttachment(attachment, messageId) {
@@ -193,5 +209,6 @@ async function createMailBoxListener() {
 
 }
 
+
 start();
-//createMailBoxListener();
+createMailBoxListener();
