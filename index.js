@@ -1,5 +1,4 @@
 const { MailListener } = require("@dchicchon/mail-listener");
-
 const supabase = require('./config.js');
 
 var mailListeners = [];
@@ -12,7 +11,7 @@ async function setChannelId() {
         .select().eq('channel', 'email')
         .single()
 
-    if (data != null) {
+    if (data != null && error == null) {
         channelId = data.id
     }
     else {
@@ -28,7 +27,7 @@ async function start() {
         .from('mailboxes')
         .select()
 
-    if (data != null) {
+    if (data != null && error == null) {
         data.forEach(createMailListener);
     }
     else {
@@ -36,7 +35,7 @@ async function start() {
     }
 }
 
-async function getEmailAddressId(mail) {
+async function getEmailAddressId(email) {
 
     const { data, error } = await supabase
         .from('email_addresses')
@@ -46,15 +45,13 @@ async function getEmailAddressId(mail) {
 
     if (data == null) {
 
-        console.log('YEEAHH')
-
         const { data, error } = await supabase
             .from('email_addresses')
-            .insert({ email: email, 'active': true })
+            .insert({ customer_id: null, email: email, 'active': true })
             .select()
             .single()
 
-        if (data != null) {
+        if (data != null && error == null) {
             return data.id
         }
         else {
@@ -64,32 +61,44 @@ async function getEmailAddressId(mail) {
     else {
         return data.id
     }
-
 }
 
-async function createMessage(mail, organisationId) {
+async function createEmail(messageId, emailAddressId, mailboxId) {
+
+    const { data, error } = await supabase
+        .from('emails')
+        .insert({ message_id: messageId, email_address_id: emailAddressId, mailbox_id: mailboxId })
+        .select()
+        .single()
+
+    if (data != null && error == null) {
+        return data.id
+    }
+    else {
+        return null
+    }
+}
+
+async function createMessage(mail, mailbox) {
+
+    var organisationId = mailbox.organisation_id
+    var mailboxId = mailbox.id
 
     const { data, error } = await supabase
         .from('messages')
         .insert({ organisation_id: organisationId, channel_id: channelId, subject: mail.subject, body: mail.text, incoming: true })
+        .select()
         .single()
 
     if (data != null && error == null) {
 
         var messageId = data.id;
+        var emailAddressId = await getEmailAddressId(mail.from.value[0].address);
 
-        var result = await getEmailAddressId(mail.from);
-        console.log(result)
+        if (emailAddressId != null) {
+            var emailId = await createEmail(messageId, emailAddressId, mailboxId)
 
-        if (result != null) {
-
-            const { data, error } = await supabase
-                .from('emails')
-                .insert({ organisation_id: organisationId, channel_id: channelId, subject: mail.subject, body: mail.text, incoming: true })
-                .select()
-                .single()
-
-            if (data != null) {
+            if (emailId != null) {
                 console.log('Email successfully saved')
             }
             else {
@@ -97,7 +106,7 @@ async function createMessage(mail, organisationId) {
             }
         }
         else {
-            console.log('No email_address.id & email saved')
+            console.log('No message & email_address.id & email saved')
             return null
         }
     }
@@ -159,7 +168,7 @@ function createMailListener(mailbox) {
 
     mailListeners[mailbox.email].on("mail", async function (mail, seqno) {
 
-        var messageId = await createMessage(mail, mailbox.organisation_id);
+        var messageId = await createMessage(mail, mailbox);
 
         if (messageId != null) {
             if (mail.attachments.length > 0) {
@@ -199,16 +208,15 @@ async function createMailBoxListener() {
         })
         .subscribe()
 
-    supabase
-        .channel('public:mailboxes')
-        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'mailboxes' }, async payload => {
-            console.log('Mailbox list has been updated', payload)
-            removeMailListener(payload);
-        })
-        .subscribe()
+    // supabase
+    //     .channel('public:mailboxes')
+    //     .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'mailboxes' }, async payload => {
+    //         console.log('Mailbox list has been updated', payload)
+    //         removeMailListener(payload);
+    //     })
+    //     .subscribe()
 
 }
-
 
 start();
 createMailBoxListener();
