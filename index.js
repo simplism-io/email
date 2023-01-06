@@ -1,28 +1,90 @@
 const { MailListener } = require("@dchicchon/mail-listener");
-require('dotenv').config()
-const fs = require('fs')
-const { createClient } = require('@supabase/supabase-js');
 
-const supabase = createClient(process.env.MODE == 'debug' ? process.env.SUPABASE_URL_DEBUG : process.env.SUPABASE_URL_PROD, process.env.MODE == 'debug' ? process.env.SUPABASE_KEY_DEBUG : process.env.SUPABASE_KEY_PROD)
+const supabase = require('./config.js');
 
-var mailListeners = []
+var mailListeners = [];
+var channelId;
+
+async function setChannelId() {
+
+    const { data, error } = await supabase
+        .from('channels').select().eq('channel', 'email').single()
+
+    if (data != null) {
+        channelId = data.id
+    }
+    else {
+        console.log('No channels found')
+    }
+}
 
 async function start() {
+
+    await setChannelId();
+
     const { data, error } = await supabase
         .from('mailboxes')
         .select()
 
-    data.forEach(createMailListener);
+    if (data != null) {
+        data.forEach(createMailListener);
+    }
+    else {
+        console.log('No mailboxes found')
+    }
+}
+
+async function getEmailAddressId(email) {
+
+    const { data, error } = await supabase
+        .from('email_addresses')
+        .eq('email', email)
+        .select(id, customers(id))
+        .single()
+
+    console.log(data);
+
+    if (data != null) {
+        const { data, error } = await supabase
+            .from('email_addresses')
+            .insert({ email: email })
+            .single()
+
+        console.log(data);
+
+        if (data != null) {
+            return data.id
+        }
+        else {
+            return null
+        }
+    }
+    else {
+        return data.id
+    }
+
 }
 
 async function createMessage(mail, organisation_id) {
 
     const { data, error } = await supabase
         .from('messages')
-        .insert({ organisation_id: organisation_id, subject: mail.subject, body: mail.text })
-        .select()
+        .insert({ organisation_id: organisation_id, channel_id: channelId, subject: mail.subject, body: mail.text, incoming: true })
+        .single()
+
+    console.log(data);
 
     if (data != null && error == null) {
+
+        var result = await getEmailAddressId(mail.from);
+        console.log(result)
+
+        const { data, error } = await supabase
+            .from('emails')
+            .insert({ organisation_id: organisation_id, channel_id: channelId, subject: mail.subject, body: mail.text, incoming: true })
+            .select()
+
+
         return data[0].id
     }
     else {
@@ -48,6 +110,11 @@ async function saveAttachment(attachment, messageId) {
 
 }
 
+function removeMailListener(mailbox) {
+    mailListeners[mailbox.email].stop();
+    delete mailListeners[mailbox.email];
+}
+
 function createMailListener(mailbox) {
 
     mailListeners[mailbox.email] = new MailListener({
@@ -65,7 +132,7 @@ function createMailListener(mailbox) {
         markSeen: true, // all fetched email willbe marked as seen and not fetched next time
         fetchUnreadOnStart: true, // use it only if you want to get all unread email on lib start. Default is `false`,
         attachments: false, // download attachments as they are encountered to the project directory
-        attachmentOptions: { directory: "attachments/" } // specify a download directory for attachments
+        //attachmentOptions: { directory: "attachments/" } // specify a download directory for attachments
     });
 
     mailListeners[mailbox.email].start();
@@ -81,7 +148,6 @@ function createMailListener(mailbox) {
         if (messageId != null) {
             if (mail.attachments.length > 0) {
                 for (let attachment of mail.attachments) {
-                    console.log(attachment);
                     var resultSaveAttachment = await saveAttachment(attachment.content, messageId);
                     if (resultSaveAttachment == true) {
                         console.log('Transaction complete');
@@ -100,23 +166,32 @@ function createMailListener(mailbox) {
         // createMailListener(mailbox)
     });
 
-    // mailListeners[mailbox.email].on("server:disconnected", function () {
-    //     console.log("imapDisconnected");
-    //     mailListeners[mailbox.email].stop();
-    //     createMailListener(mailbox)
-    // });
+    mailListeners[mailbox.email].on("server:disconnected", function () {
+        console.log("Imap Disconnected");
+        // mailListeners[mailbox.email].stop();
+        // createMailListener(mailbox)
+    });
 
 }
 
-async function createCloudListener() {
+async function createMailBoxListener() {
     supabase
         .channel('public:mailboxes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'mailboxes' }, async payload => {
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mailboxes' }, async payload => {
             console.log('Mailbox list has been updated', payload)
             createMailListener(payload);
         })
         .subscribe()
+
+    supabase
+        .channel('public:mailboxes')
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'mailboxes' }, async payload => {
+            console.log('Mailbox list has been updated', payload)
+            removeMailListener(payload);
+        })
+        .subscribe()
+
 }
 
 start();
-createCloudListener();
+//createMailBoxListener();

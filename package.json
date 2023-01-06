@@ -1,5 +1,5 @@
 {
-  "name": "email",
+  "name": "receiver",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -8,14 +8,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/simplism-io/email.git"
+    "url": "https://github.com/simplism-io/receiver.git"
   },
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/simplism-io/email/issues"
+    "url": "https://github.com/simplism-io/receiver/issues"
   },
-  "homepage": "https://github.com/simplism-io/email#readme",
+  "homepage": "https://github.com/simplism-io/receiver#readme",
   "dependencies": {
     "@dchicchon/mail-listener": "^2.0.6",
     "@supabase/supabase-js": "^2.2.2",
