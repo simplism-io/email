@@ -145,7 +145,7 @@ function createMailListener(mailbox) {
     mailListeners[mailbox.email] = new MailListener({
         username: mailbox.email, // mail
         password: mailbox.password, // pass
-        host: mailbox.host,
+        host: mailbox.imap,
         port: 993, // imap port
         tls: true,
         connTimeout: 10000, // Default by node-imap
